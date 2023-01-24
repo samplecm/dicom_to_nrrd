@@ -13,5 +13,9 @@ There are 5 arguments (2 needed minimum):
 
 Example:
 
-on the command line, 
+on the command line (all one line) 
 >> python dicom_to_nrrd.py --img_dir path/to/dicom/img/series --structure_dir path/to/dicom/structure/files  --modality MR --save_dir path/to/save/nrrd/img --save_dir_struct path/to/save/nrrd/structure
+
+Note that it is ok to have the structure files in the same directory as the images. In this case you only need to include the image directory, img_dir. Similarly, it is ok to save all data to a single directory, and you then only need to include --save_dir.
+
+For now, you must have only one patient's data in the directories, and also only one image series. 
