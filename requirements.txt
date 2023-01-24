@@ -1,0 +1,11 @@
+fastDamerauLevenshtein==1.0.7
+matplotlib==3.5.2
+numpy==1.21.5
+Pillow==9.4.0
+pydicom==2.3.1
+pyplastimatch==0.1
+pyradiomics==3.0.1
+radiomics==0.1
+scipy==1.9.1
+Shapely==2.0.0
+six==1.16.0
