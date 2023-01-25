@@ -84,7 +84,25 @@ class Img_Series:
         self.image_array = img_array          
         print("")
 
-        
+
+def test():
+    img_dir = "/media/sf_U_DRIVE/Profile/Desktop/Programs/IVIM_Code/Analysis_Data/SIVIM02/pre/radiomics_data/images/ivim/dicom"
+    struct_dir = "/media/sf_U_DRIVE/Profile/Desktop/Programs/IVIM_Code/Analysis_Data/SIVIM02/pre/radiomics_data/structs/ivim/dicom"
+    save_img_dir = "/media/sf_U_DRIVE/Profile/Desktop/Programs/IVIM_Code/Analysis_Data/SIVIM02/pre/radiomics_data/images/ivim/stk"
+    save_struct_dir = "/media/sf_U_DRIVE/Profile/Desktop/Programs/IVIM_Code/Analysis_Data/SIVIM02/pre/radiomics_data/structs/ivim/stk"
+    # img_dir = r"U:\Profile\Desktop\Programs\IVIM_Code\Analysis_Data\SIVIM02\pre\radiomics_data\images\ivim\dicom"
+    # struct_dir = r"U:\Profile\Desktop\Programs\IVIM_Code\Analysis_Data\SIVIM02\pre\radiomics_data\structs\ivim\dicom"
+    # save_img_dir = r"U:\Profile\Desktop\Programs\IVIM_Code\Analysis_Data\SIVIM02\pre\radiomics_data\images\ivim\stk"
+    # save_struct_dir = r"U:\Profile\Desktop\Programs\IVIM_Code\Analysis_Data\SIVIM02\pre\radiomics_data\structs\ivim\stk"
+    # img_series = Img_Series(img_dir)
+    # structures_dict = dicom_structure_finding.get_contours(struct_dir)
+    # structures_dict_img_coords = convert_contours_to_img_coords(img_series, structures_dict)
+    
+    # structures_dict_img_coords_on_plane = get_contours_on_img_planes(img_series, structures_dict_img_coords)
+
+    # structures_masks_dict = get_all_structure_masks(img_series, structures_dict_img_coords_on_plane)
+    # save_all_img_and_mask_as_nrrd(img_series, structures_masks_dict, save_paths=[save_img_dir, save_struct_dir])
+    convert_all_dicoms_to_nrrd(img_dir, struct_dir, "CT", save_paths=[save_img_dir,save_struct_dir])        
 
 def get_img_series_metadata(img_dir, modality="ct"):
     #will return a list which has the metadata for each image in slice order. 
@@ -236,24 +254,6 @@ def convert_all_dicoms_to_nrrd(img_dir, struct_dir, modality, save_paths=None):
     structures_masks_dict = get_all_structure_masks(img_series, structures_dict_img_coords_on_plane)
     save_all_img_and_mask_as_nrrd(img_series, structures_masks_dict, save_paths=save_paths)
 
-def test():
-    img_dir = "/media/sf_U_DRIVE/Profile/Desktop/Programs/IVIM_Code/Analysis_Data/SIVIM02/pre/radiomics_data/images/ivim/dicom"
-    struct_dir = "/media/sf_U_DRIVE/Profile/Desktop/Programs/IVIM_Code/Analysis_Data/SIVIM02/pre/radiomics_data/structs/ivim/dicom"
-    save_img_dir = "/media/sf_U_DRIVE/Profile/Desktop/Programs/IVIM_Code/Analysis_Data/SIVIM02/pre/radiomics_data/images/ivim/stk"
-    save_struct_dir = "/media/sf_U_DRIVE/Profile/Desktop/Programs/IVIM_Code/Analysis_Data/SIVIM02/pre/radiomics_data/structs/ivim/stk"
-    # img_dir = r"U:\Profile\Desktop\Programs\IVIM_Code\Analysis_Data\SIVIM02\pre\radiomics_data\images\ivim\dicom"
-    # struct_dir = r"U:\Profile\Desktop\Programs\IVIM_Code\Analysis_Data\SIVIM02\pre\radiomics_data\structs\ivim\dicom"
-    # save_img_dir = r"U:\Profile\Desktop\Programs\IVIM_Code\Analysis_Data\SIVIM02\pre\radiomics_data\images\ivim\stk"
-    # save_struct_dir = r"U:\Profile\Desktop\Programs\IVIM_Code\Analysis_Data\SIVIM02\pre\radiomics_data\structs\ivim\stk"
-    # img_series = Img_Series(img_dir)
-    # structures_dict = dicom_structure_finding.get_contours(struct_dir)
-    # structures_dict_img_coords = convert_contours_to_img_coords(img_series, structures_dict)
-    
-    # structures_dict_img_coords_on_plane = get_contours_on_img_planes(img_series, structures_dict_img_coords)
-
-    # structures_masks_dict = get_all_structure_masks(img_series, structures_dict_img_coords_on_plane)
-    # save_all_img_and_mask_as_nrrd(img_series, structures_masks_dict, save_paths=[save_img_dir, save_struct_dir])
-    convert_all_dicoms_to_nrrd(img_dir, struct_dir, "CT", save_paths=[save_img_dir,save_struct_dir])
 
 if __name__ == "__main__":
 
@@ -267,13 +267,21 @@ if __name__ == "__main__":
     v = vars(args)
     n_args = sum([1 for a in v.values() if a])
     print("Starting DICOM to NRRD converter.")
-
+    print(f"Supplied image directory: {args.img_dir}")
+    print(f"Supplied structure directory: {args.structure_dir}")
+    print(f"Supplied output directory: {args.save_dir}")
+    print(f"Supplied modality: {args.modality}")
 
     img_dir = None
     structure_dir = None
     modality = "CT"
     save_dir = None
-
+    if os.path.exists(args.img_dir):
+        img_dir = args.img_dir
+    if os.path.exists(args.structure_dir):
+        structure_dir = args.structure_dir
+    if os.path.exists(args.save_dir):
+        save_dir = args.save_dir
     if args.img_dir == None:
         while True:
             try:
@@ -409,5 +417,5 @@ if __name__ == "__main__":
         save_dir = [save_dir[0], args.save_dir_struct]          
     if args.modality == None:
         print("no modality specified, using CT as default.")
-
+    
     convert_all_dicoms_to_nrrd(img_dir, structure_dir, modality, save_dir)    
