@@ -212,9 +212,9 @@ def save_all_img_and_mask_as_nrrd(img_series, structures_masks_dict, save_paths=
     for structure_name in structures_masks_dict:
         save_img_and_mask_as_nrrd(img_series, structure_name, structures_masks_dict[structure_name], save_paths)
     return
-def save_img_and_mask_as_nrrd(img_series, structure_name, structure_masks, save_paths=None):
+def save_img_and_mask_as_nrrd(img_series, structure_name, structure_masks, save_paths):
     img_file_name = img_series.name + "_" + img_series.acquisition_date + ".nrrd"
-    struct_file_name = img_series.name + "_" + img_series.acquisition_date + structure_name + ".nrrd"
+    struct_file_name = img_series.name + "_" + img_series.acquisition_date + "_" + structure_name + ".nrrd"
     if type(save_paths) is list and len(save_paths) > 1:
         img_save_path = os.path.join(save_paths[0], img_file_name)
         struct_save_path = os.path.join(save_paths[1], struct_file_name)
@@ -224,21 +224,24 @@ def save_img_and_mask_as_nrrd(img_series, structure_name, structure_masks, save_
     elif type(save_paths) == str:
         img_save_path = os.path.join(save_paths, img_file_name)
         struct_save_path = os.path.join(save_paths, struct_file_name)    
-    if save_paths is None:
+    if save_paths is None:  
         img_save_path = os.path.join(os.getcwd(), img_file_name) 
-        struct_save_path = os.path.join(os.getcwd(), struct_file_name)     
+        struct_save_path = os.path.join(os.getcwd(), struct_file_name)   
+    
     
     #first need to swap the rows and columns of image and masks because nrrd wants first dimension to be width, second to be height . also sort from largest z to smallest instead of smallest to largest
     img = np.swapaxes(img_series.image_array, 0,2)
     mask = np.swapaxes(structure_masks,0,2)
+    #make the header
+    header = {'kinds': ['domain', 'domain', 'domain'], 'units': ['mm','mm', 'mm'], 'spacings': [float(img_series.pixel_spacing[1]), float(img_series.pixel_spacing[0]), float(img_series.slice_thickness)]} #'space directions': np.array([[1,0,0], [0,1,0],[0,0,1]])
     try:
-        nrrd.write(img_save_path, img)    
+        nrrd.write(img_save_path, img, header)    
         print(f"Wrote nrrd file {img_file_name} to {img_save_path}")
     except:
         print(f"Failed to write nrrd file {img_file_name} to {img_save_path}")
          
     try:
-        nrrd.write(struct_save_path, mask)
+        nrrd.write(struct_save_path, mask, header)
         print(f"Wrote nrrd file {struct_file_name} to {struct_save_path}")
     except:    
         print(f"Failed to write nrrd file {struct_file_name} to {struct_save_path}")       
