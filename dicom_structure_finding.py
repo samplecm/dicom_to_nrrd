@@ -3,11 +3,13 @@ import pydicom
 import numpy as np
 from operator import itemgetter
 from fastDamerauLevenshtein import damerauLevenshtein
+from Contours import Contours
+import Chopper
 
 
-def get_contours(struct_path):
-    #return a dictionary of all structure names: contours
-    struct_metas = []    #hold the list of struct file strings in struct_path
+def get_contours(struct_path, subsegmentation=None):
+    #return a dictionary of all structure names: contour objects. see contours.py file for object attributes.
+
     struct_paths = os.listdir(struct_path)
 
     contours_dict = {}
@@ -53,10 +55,10 @@ def get_contours(struct_path):
                     else:
                         pointListy = np.array([x,y,z])   
                     numContourPoints+=1       
-                contours[-1] = tempContour  
-                contours.sort(key=lambda x: x[0][2])    
-
-            contours_dict[structure_name] = contours 
+                contours[-1] = [tempContour]  
+            contours.sort(key=lambda x: x[0][0][2])    
+            contours_obj = Contours(structure_name, structure_name, contours)
+            contours_dict[structure_name] = contours_obj 
                       
     return contours_dict    
 

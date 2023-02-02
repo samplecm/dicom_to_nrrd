@@ -5,13 +5,19 @@ import copy
 import matplotlib.pyplot as plt
 import mask_interpolation
 def get_all_structure_masks(img_series, structures_dict):
-    new_dict = {}
+
     coords_array = img_series.coords_array_img
     for structure_name in structures_dict:
-        contours = structures_dict[structure_name]
+        contours = structures_dict[structure_name].whole_roi_img_planes
         mask_array = get_contour_masks(contours, coords_array)
-        new_dict[structure_name] = mask_array
-    return new_dict
+        structures_dict[structure_name].whole_roi_masks = mask_array
+        #now get subsegment masks
+        subseg_masks = []
+        for subseg in structures_dict[structure_name].segmented_contours_img_planes:
+            mask_array = get_contour_masks(subseg, coords_array)
+            subseg_masks.append(mask_array)
+        structures_dict[structure_name].subseg_masks = subseg_masks    
+    return structures_dict
 def get_contour_masks(contours, array):
     num_slices, len1, len2 = array.shape[1:]
     contour_masks = np.zeros((num_slices,len1,len2)) 
@@ -21,22 +27,25 @@ def get_contour_masks(contours, array):
         contour_mask_filled = Image.new('L', (len2, len1), 0)
         slice_found = False
         
-        for i, contour in enumerate(contours):
-            if len(contour) < 3:
+        for contour in contours:
+            if contour == []:
                 continue
-            if abs(int(round(contour[0][2], 2)*100) - int(round(array[2,idx,0,0], 2)*100)) < 2: #if contour is on the current slice and only want to make new image when starting with first island
-                slice_found = True
-                contourPoints = []
-                for point in contour:
-                    contourPoints.append((int(point[0]), int(point[1]))) #changed
-                ImageDraw.Draw(contour_mask_filled).polygon(contourPoints, outline= 1, fill = 1)         
+            for slice in contour:
+                if len(slice) < 3:
+                    continue
+                if abs(int(round(slice[0][2], 2)*100) - int(round(array[2,idx,0,0], 2)*100)) < 2: #if contour is on the current slice and only want to make new image when starting with first island
+                    slice_found = True
+                    contourPoints = []
+                    for point in slice:
+                        contourPoints.append((int(point[0]), int(point[1]))) #changed
+                    ImageDraw.Draw(contour_mask_filled).polygon(contourPoints, outline= 1, fill = 1)         
 
-                # plt.imshow(contour_mask_filled)
-                # plt.show()
-                # unshown=False
-                # print("")
-            if slice_found == True:
-                break        
+                    # plt.imshow(contour_mask_filled)
+                    # plt.show()
+                    # unshown=False
+                    # print("")
+                if slice_found == True:
+                    break        
  
         contour_masks[idx, :,:] = np.array(contour_mask_filled)       
     #lastly, want to interpolate any missing slices. 
@@ -61,8 +70,11 @@ def cartesian_to_pixel_coordinates(contours, array):
     xVals = array[0,0,0,:]
     yVals = array[1,0,:,0]
     for contour in contours: 
-        if len(contour) == 0: continue
-        for point in contour:
-            point[0] = min(range(len(xVals)), key=lambda i: abs(xVals[i]-point[0]))
-            point[1] = min(range(len(yVals)), key=lambda i: abs(yVals[i]-point[1]))
+        if len(contour) == 0:
+            continue
+        for slice in contour:
+            if len(slice) == 0: continue
+            for point in slice:
+                point[0] = min(range(len(xVals)), key=lambda i: abs(xVals[i]-point[0]))
+                point[1] = min(range(len(yVals)), key=lambda i: abs(yVals[i]-point[1]))
     return contours  

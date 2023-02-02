@@ -10,6 +10,8 @@ from get_contour_masks import get_all_structure_masks
 import nrrd
 import argparse
 import re
+import Chopper
+import Visuals_Subsegs
 
 class Img_Series:
     def __init__(self, data_dir, modality):
@@ -141,27 +143,28 @@ def convert_contours_to_img_coords(img_series, structures_dict):
     cos_cx = img_series.cos_cx
     cos_cy = img_series.cos_cy
     cos_cz = img_series.cos_cz
-    new_dict = {}
     for structure_name in structures_dict:
-        new_contours = []
+        new_whole_roi = []
         contours = structures_dict[structure_name]
-        for contour in contours:
-            new_contour = []
-            for point in contour:
-                #first get distance of x,y,z from image origin
-                x_rel = point[0] - x_orig
-                y_rel = point[1] - y_orig
-                z_rel = point[2] - z_orig
+        whole_roi = contours.wholeROI
+        for contour in whole_roi:
+            for island in contour:
+                new_contour = []
+                for point in island:
+                    #first get distance of x,y,z from image origin
+                    x_rel = point[0] - x_orig
+                    y_rel = point[1] - y_orig
+                    z_rel = point[2] - z_orig
 
-                #now get converted points (x,y,z) --> (a,b,c)
-                a = (x_rel * cos_ax) + (y_rel * cos_ay) + (z_rel * cos_az)
-                b = (x_rel * cos_bx) + (y_rel * cos_by) + (z_rel * cos_bz)
-                c = (x_rel * cos_cx) + (y_rel * cos_cy) + (z_rel * cos_cz)
+                    #now get converted points (x,y,z) --> (a,b,c)
+                    a = (x_rel * cos_ax) + (y_rel * cos_ay) + (z_rel * cos_az)
+                    b = (x_rel * cos_bx) + (y_rel * cos_by) + (z_rel * cos_bz)
+                    c = (x_rel * cos_cx) + (y_rel * cos_cy) + (z_rel * cos_cz)
 
-                new_contour.append([a,b,c])
-            new_contours.append(new_contour)   
-        new_dict[structure_name] = new_contours 
-    return new_dict  
+                    new_contour.append([a,b,c])
+            new_whole_roi.append([new_contour])     
+        contours.whole_roi_img = new_whole_roi           
+    return structures_dict  
 
    
 
@@ -175,46 +178,92 @@ def get_contours_on_img_planes(img_series, structures_dict):
     for c in coords_array_img[2,:,0,0]:
         c_vals.append(c)
     c_vals = np.array(c_vals)
-    new_dict = {}
+
 
     for structure_name in structures_dict:
-        new_contours = []    
-        contours = structures_dict[structure_name]
-        for contour in contours:
+        new_contours_whole = []    
+        contours_whole = structures_dict[structure_name].whole_roi_img
+        for contour in contours_whole:
             if len(contour) == 0:
                 continue
-            c = contour[0][2]
-            closest_indices = np.argsort(np.abs(c_vals-c))
-            closest_img_c = c_vals[closest_indices[0]]     #find two closest image slices c vals
-            second_closest_img_c = c_vals[closest_indices[1]]
+            for island in contour:
+                c = island[0][2]
+                closest_indices = np.argsort(np.abs(c_vals-c))
+                closest_img_c = c_vals[closest_indices[0]]     #find two closest image slices c vals
 
-            if np.abs(closest_img_c-c) > slice_thickness:
-                print(f"Couldn't find image slice in range for contour at c = {c}")
-                continue
-            elif np.abs(closest_img_c-c) <= 0.5:
-                new_contour = []
-                for point in contour:
-                    new_point = [point[0], point[1], closest_img_c] 
-                    new_contour.append(new_point)
-                new_contours.append(new_contour)    
-            elif np.abs(closest_img_c-c) < slice_thickness:
-                print(f"Warning: contour for {structure_name} at c = {c} assigned to image slice more than 0.5mm away, but less than slice thickness.")
-                new_contour = []
-                for point in contour:
-                    new_point = [point[0], point[1], closest_img_c] 
-                    new_contour.append(new_point)
-                new_contours.append(new_contour)  
-                    
-        new_dict[structure_name] = new_contours    
-    return new_dict
 
-def save_all_img_and_mask_as_nrrd(img_series, structures_masks_dict, save_paths=os.getcwd()):
-    for structure_name in structures_masks_dict:
-        save_img_and_mask_as_nrrd(img_series, structure_name, structures_masks_dict[structure_name], save_paths)
+                if np.abs(closest_img_c-c) > slice_thickness:
+                    print(f"Couldn't find image slice in range for contour at c = {c}")
+                    continue
+                elif np.abs(closest_img_c-c) <= 0.5:
+                    new_contour = []
+                    for point in island:
+                        new_point = [point[0], point[1], closest_img_c] 
+                        new_contour.append(new_point)
+                    new_contours_whole.append([new_contour])    
+                elif np.abs(closest_img_c-c) < slice_thickness:
+                    print(f"Warning: contour for {structure_name} at c = {c} assigned to image slice more than 0.5mm away, but less than slice thickness.")
+                    new_contour = []
+                    for point in island:
+                        new_point = [point[0], point[1], closest_img_c] 
+                        new_contour.append(new_point)
+                    new_contours_whole.append([new_contour])  
+
+        #now get the subsegment contours on the image planes            
+        new_subsegmented_contours = []
+        subsegmented_contours = structures_dict[structure_name].segmentedContours
+        for subsegment in subsegmented_contours:
+            new_subsegment_contour = []
+            for contour in subsegment:
+                if len(contour) == 0:
+                    continue
+                for island in contour:
+                    if len(island) == 0:
+                        continue
+                    c = island[0][2]
+                    closest_indices = np.argsort(np.abs(c_vals-c))
+                    closest_img_c = c_vals[closest_indices[0]]     #find two closest image slices c vals
+
+                    if np.abs(closest_img_c-c) > slice_thickness:
+                        print(f"Couldn't find image slice in range for contour at c = {c}")
+                        continue
+                    elif np.abs(closest_img_c-c) <= 0.5:
+                        new_contour = []
+                        for point in island:
+                            new_point = [point[0], point[1], closest_img_c] 
+                            new_contour.append(new_point)
+                        new_subsegment_contour.append([new_contour])    
+                    elif np.abs(closest_img_c-c) < slice_thickness:
+                        print(f"Warning: contour for {structure_name} at c = {c} assigned to image slice more than 0.5mm away, but less than slice thickness.")
+                        new_contour = []
+                        for point in island:
+                            new_point = [point[0], point[1], closest_img_c] 
+                            new_contour.append(new_point)
+                        new_subsegment_contour.append([new_contour])      
+            new_subsegmented_contours.append(new_subsegment_contour)                        
+        structures_dict[structure_name].whole_roi_img_planes = new_contours_whole    
+        structures_dict[structure_name].segmented_contours_img_planes = new_subsegmented_contours
+    return structures_dict
+
+def save_all_img_and_mask_as_nrrd(img_series, structures_dict, save_paths=os.getcwd(), clear_existing=False):
+    if clear_existing==True:    #clear existing files in nrrd directories
+        if type(save_paths) is list:    
+            for r in range(2):
+                for file in os.listdir(save_paths[r]):
+                    os.remove(os.path.join(save_paths[r], file))
+        elif type(save_paths) == str:
+            for file in os.listdir(save_paths):
+                os.remove(os.path.join(save_paths, file))
+             
+    for structure_name in structures_dict:
+        save_img_and_mask_as_nrrd(img_series, structure_name, structures_dict[structure_name], save_paths)
     return
-def save_img_and_mask_as_nrrd(img_series, structure_name, structure_masks, save_paths):
+def save_img_and_mask_as_nrrd(img_series, structure_name, structure, save_paths):
     img_file_name = img_series.name + "_" + img_series.acquisition_date + ".nrrd"
-    struct_file_name = img_series.name + "_" + img_series.acquisition_date + "_" + structure_name + ".nrrd"
+    struct_file_name = img_series.name + "_" + img_series.acquisition_date + "__" + structure_name + "__"  #put whole or ss number after, and .nrrd
+    whole_roi_mask = structure.whole_roi_masks
+    subseg_masks = structure.subseg_masks
+
     if type(save_paths) is list and len(save_paths) > 1:
         img_save_path = os.path.join(save_paths[0], img_file_name)
         struct_save_path = os.path.join(save_paths[1], struct_file_name)
@@ -231,7 +280,7 @@ def save_img_and_mask_as_nrrd(img_series, structure_name, structure_masks, save_
     
     #first need to swap the rows and columns of image and masks because nrrd wants first dimension to be width, second to be height . also sort from largest z to smallest instead of smallest to largest
     img = np.swapaxes(img_series.image_array, 0,2)
-    mask = np.swapaxes(structure_masks,0,2)
+    
     #make the header
     header = {'kinds': ['domain', 'domain', 'domain'], 'units': ['mm','mm', 'mm'], 'spacings': [float(img_series.pixel_spacing[1]), float(img_series.pixel_spacing[0]), float(img_series.slice_thickness)]} #'space directions': np.array([[1,0,0], [0,1,0],[0,0,1]])
     try:
@@ -239,23 +288,39 @@ def save_img_and_mask_as_nrrd(img_series, structure_name, structure_masks, save_
         print(f"Wrote nrrd file {img_file_name} to {img_save_path}")
     except:
         print(f"Failed to write nrrd file {img_file_name} to {img_save_path}")
-         
+
+    whole_roi_mask = np.swapaxes(whole_roi_mask,0,2)     
     try:
-        nrrd.write(struct_save_path, mask, header)
-        print(f"Wrote nrrd file {struct_file_name} to {struct_save_path}")
+        nrrd.write(str(struct_save_path + "whole__.nrrd"), whole_roi_mask, header)
+        print(f"Wrote nrrd file {struct_file_name} to {str(struct_save_path + 'whole__.nrrd')}")
     except:    
-        print(f"Failed to write nrrd file {struct_file_name} to {struct_save_path}")       
+        print(f"Failed to write nrrd file {struct_file_name} to {struct_save_path}")    
+
+
+    for s,subseg in enumerate(subseg_masks):
+        subseg = np.swapaxes(subseg, 0, 2)
+        try:
+            nrrd.write(str(struct_save_path + str(s) + "__.nrrd"), subseg, header)
+            print(f"Wrote nrrd file {struct_file_name} to {struct_save_path + str(s) + '__.nrrd'}")
+        except:    
+            print(f"Failed to write nrrd file {struct_file_name} to {struct_save_path + str(s) + '__.nrrd'}")         
     return
 
-def convert_all_dicoms_to_nrrd(img_dir, struct_dir, modality, save_paths=None):   
+def convert_all_dicoms_to_nrrd(img_dir, struct_dir, modality, subsegmentation=None, save_paths=None):   
+    #if want subsegmentation of roi, then include the #slices [axial, y, x]
     img_series = Img_Series(img_dir, modality)
     structures_dict = dicom_structure_finding.get_contours(struct_dir)
-    structures_dict_img_coords = convert_contours_to_img_coords(img_series, structures_dict)
-    
-    structures_dict_img_coords_on_plane = get_contours_on_img_planes(img_series, structures_dict_img_coords)
+    structures_dict = convert_contours_to_img_coords(img_series, structures_dict)
 
-    structures_masks_dict = get_all_structure_masks(img_series, structures_dict_img_coords_on_plane)
-    save_all_img_and_mask_as_nrrd(img_series, structures_masks_dict, save_paths=save_paths)
+    if subsegmentation != None:    #now subsegment contours 
+        for structure in structures_dict:
+            Chopper.organ_chopper(structures_dict[structure], subsegmentation)
+
+    
+    structures_dict = get_contours_on_img_planes(img_series, structures_dict) 
+    #Visuals_Subsegs.plotSubsegments(structures_dict["l_par"].segmented_contours_img_planes)
+    structures_masks_dict = get_all_structure_masks(img_series, structures_dict)
+    save_all_img_and_mask_as_nrrd(img_series, structures_masks_dict, save_paths=save_paths, clear_existing=True)
 
 
 if __name__ == "__main__":
