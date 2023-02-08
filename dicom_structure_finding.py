@@ -3,22 +3,73 @@ import pydicom
 import numpy as np
 from operator import itemgetter
 from fastDamerauLevenshtein import damerauLevenshtein
+from Contours import Contours
+import Chopper
 
+def is_substring_present(string, str_list):
+    for s in str_list:
+        if s in string:
+            return True
+    return False  
 
-def get_contours(struct_path):
-    #return a dictionary of all structure names: contours
-    struct_metas = []    #hold the list of struct file strings in struct_path
-    struct_paths = os.listdir(struct_path)
-
+def get_contours(struct_path, specific_roi_names=None, subsegmentation=None):
+    #return a dictionary of all structure names: contour objects. see contours.py file for object attributes.
     contours_dict = {}
 
-    for file_name in struct_paths:
-        #get the modality: 
-        file_path = os.path.join(struct_path, file_name)
-        metadata = pydicom.dcmread(file_path)
+    if type(struct_path) == list:
+        struct_paths = os.listdir(struct_path)
+
+        for file_name in struct_paths:
+            #get the modality: 
+            file_path = os.path.join(struct_path, file_name)
+            metadata = pydicom.dcmread(file_path)
+            modality = metadata[0x0008,0x0060].value 
+            if "STRUCT" not in modality:
+                continue
+
+            roi_sequence = metadata.data_element("ROIContourSequence")
+            ss_sequence = metadata.data_element("StructureSetROISequence")
+            #print(dcmread(patient1_Struct[0]).data_element("ROIContourSequence")[0])
+            #collect array of contour points for test plotting
+            
+            for contour_info in roi_sequence:
+                structure_name = None
+                roi_num = contour_info.get("ReferencedROINumber")
+                for ss in ss_sequence:
+                    if ss.get("ROINumber") == roi_num:
+                        structure_name = ss.get("ROIName")
+                        break
+                if structure_name is None or is_substring_present(structure_name.lower(), specific_roi_names)==False:    #if roi_num not found or not wanted.
+                    continue    
+
+                numContourPoints = 0 
+                contours = []
+                for contoursequence in contour_info.ContourSequence: 
+                    contours.append(contoursequence.ContourData)
+                    #But this is easier to work with if we convert from a 1d to a 2d list for contours ( [ [x1,y1,z1], [x2,y2,z2] ... ] )
+                    tempContour = []
+                    i = 0
+                    while i < len(contours[-1]):
+                        x = float(contours[-1][i])
+                        y = float(contours[-1][i + 1])
+                        z = float(contours[-1][i + 2])
+                        tempContour.append([x, y, z ])
+                        i += 3
+                        if (numContourPoints > 0):
+                            pointListy = np.vstack((pointListy, np.array([x,y,z])))
+                        else:
+                            pointListy = np.array([x,y,z])   
+                        numContourPoints+=1       
+                    contours[-1] = [tempContour]  
+                contours.sort(key=lambda x: x[0][0][2])    
+                contours_obj = Contours(structure_name, structure_name, contours)
+                contours_dict[structure_name] = contours_obj 
+
+    elif type(struct_path) == str:
+        metadata = pydicom.dcmread(struct_path)
         modality = metadata[0x0008,0x0060].value 
         if "STRUCT" not in modality:
-            continue
+            raise Exception("structure file was not of type \"STRUCT\"")
 
         roi_sequence = metadata.data_element("ROIContourSequence")
         ss_sequence = metadata.data_element("StructureSetROISequence")
@@ -32,7 +83,7 @@ def get_contours(struct_path):
                 if ss.get("ROINumber") == roi_num:
                     structure_name = ss.get("ROIName")
                     break
-            if structure_name is None:    #if roi_num not found.
+            if structure_name is None or is_substring_present(structure_name.lower(), specific_roi_names)==False:    #if roi_num not found or not wanted.
                 continue    
 
             numContourPoints = 0 
@@ -53,11 +104,11 @@ def get_contours(struct_path):
                     else:
                         pointListy = np.array([x,y,z])   
                     numContourPoints+=1       
-                contours[-1] = tempContour  
-                contours.sort(key=lambda x: x[0][2])    
+                contours[-1] = [tempContour]  
+            contours.sort(key=lambda x: x[0][0][2])    
+            contours_obj = Contours(structure_name, structure_name, contours)
+            contours_dict[structure_name] = contours_obj 
 
-            contours_dict[structure_name] = contours 
-                      
     return contours_dict    
 
 def find_structure(structureList, organ, invalidStructures = []):
